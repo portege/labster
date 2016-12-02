@@ -1,0 +1,7 @@
+---
+- name: Provisioning
+  hosts: local
+  connection: local
+  gather_facts: no
+  roles:
+    - role: provision

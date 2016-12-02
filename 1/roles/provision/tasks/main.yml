@@ -1,0 +1,79 @@
+---
+- ec2:
+    region: ap-southeast-1
+    instance_type: t2.micro
+    image: ami-a1288ec2
+    keypair: "ansible"
+    wait: yes
+    count: 1
+    vpc_subnet_id: subnet-5b45853e
+    assign_public_ip: yes
+    group_id: sg-f4936c93
+  register: ec2
+
+- name: drink a coffee
+  wait_for: host="{{ ec2.instances[0].public_ip }}" port=22 delay=60 timeout=320 state=started
+
+- debug: var=ec2.instances[0].public_ip
+
+- rds:
+    command: create
+    region: ap-southeast-1
+    instance_name: dbname
+    db_engine: MySQL
+    size: 10
+    instance_type: db.m1.small
+    username: dbuser
+    password: dbpassword
+
+- rds:
+    region: ap-southeast-1
+    command: facts
+    instance_name: dbname
+  register: rds
+
+- debug: var=rds.instance.endpoint
+
+- name: installing update cache
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  raw: sudo apt-get update -y
+  remote_user: ubuntu
+  become: yes
+
+- name: installing python2
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  raw: sudo apt-get -y install python-simplejson
+  remote_user: ubuntu
+  become: yes
+
+- name: installing requirement
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  apt:
+      name="{{ item }}"
+      update_cache=yes
+      state=latest
+  with_items:
+      - nginx
+      - mysql-server
+      - python-django
+  remote_user: ubuntu
+  become: yes
+
+- name: creating project
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  raw: django-admin startproject cms
+  remote_user: ubuntu
+
+- name: dbsync
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  remote_user: ubuntu
+  django_manage:
+     command: migrate
+     app_path: "/home/ubuntu/cms/"
+
+- name: create user
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  remote_user: ubuntu
+  django_manage:
+     command: "createsuperuser --noinput --username=admin --email=admin@example.com"
+     app_path: "/home/ubuntu/cms/"
