@@ -1,0 +1,1 @@
+ansible-playbook -i roles/provision/inventories/local playbook.yml -vvv --private-key=master.key

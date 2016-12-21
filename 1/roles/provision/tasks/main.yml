@@ -56,24 +56,101 @@
       - nginx
       - mysql-server
       - python-django
+      - python-pip
+      - libmysqlclient-dev
   remote_user: ubuntu
   become: yes
 
+- name: nginx config
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  template: src=templates/default dest=/etc/nginx/sites-available/default
+  remote_user: ubuntu
+  become: yes
+
+- name: restarting nginx
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  service: name=nginx state=restarted
+  remote_user: ubuntu
+  become: yes
+
+# sometimes I'm too damn lazy and treat ansible just like bash script
+
+- name: installing mysql-python
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  raw: pip install mysql-python
+  remote_user: ubuntu
+
+- name: installing pymysql
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  raw: pip install pymysql
+  remote_user: ubuntu
+
+- name: installing djangocms
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  raw: pip install djangocms-installer
+  remote_user: ubuntu
+  become: yes
+
+- name: buggy
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  raw: cp /usr/bin/django-admin /usr/bin/django-admin.py
+  remote_user: ubuntu
+  become: yes
+
+#- name: drink another coffee
+#  delegate_to: "{{ ec2.instances[0].public_ip }}"
+#  wait_for: path=/home/ubuntu/.local/bin/djangocms state=present delay=10 timeout=30
+#  remote_user: ubuntu
+
 - name: creating project
   delegate_to: "{{ ec2.instances[0].public_ip }}"
-  raw: django-admin startproject cms
+  raw: djangocms labster
   remote_user: ubuntu
+  become: yes
+
+- name: file permission
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  file: state=directory recurse=yes path=/home/ubuntu/labster/ owner=ubuntu group=ubuntu mode=0755
+  remote_user: ubuntu
+  become: yes
+
+#- name: creating project
+#  delegate_to: "{{ ec2.instances[0].public_ip }}"
+#  raw: django-admin startproject cms
+#  remote_user: ubuntu
+
+- name: Update db name
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  remote_user: ubuntu
+  become: yes
+  replace: dest=labster/labster/settings.py
+    regexp="project.db"
+    replace=db.db
 
 - name: dbsync
   delegate_to: "{{ ec2.instances[0].public_ip }}"
   remote_user: ubuntu
   django_manage:
      command: migrate
-     app_path: "/home/ubuntu/cms/"
+     app_path: "/home/ubuntu/labster/"
 
 - name: create user
   delegate_to: "{{ ec2.instances[0].public_ip }}"
   remote_user: ubuntu
   django_manage:
-     command: "createsuperuser --noinput --username=admin --email=admin@example.com"
-     app_path: "/home/ubuntu/cms/"
+     command: "createsuperuser --noinput --username=labster --email=admin@example.com"
+     app_path: "/home/ubuntu/labster/"
+
+- name: run server
+  delegate_to: "{{ ec2.instances[0].public_ip }}"
+  raw: /usr/bin/nohup /usr/bin/python /home/ubuntu/labster/manage.py runserver &
+  remote_user: ubuntu
+
+#- name: runserver
+#  delegate_to: "{{ ec2.instances[0].public_ip }}"
+#  remote_user: ubuntu
+#  django_manage:
+#     command: runserver
+#     app_path: "/home/ubuntu/labster/"
+#  become: yes
+
